@@ -2249,12 +2249,12 @@ If you use or adapt these materials for teaching, workshops, or training purpose
 
 Suggested citation:
 
-Santillan E. (2026). *SCELSE Summer Course 2026: Experimental Design and Data Analysis* [Course materials]. GitHub. Available at:
+Santillan E. (2026). *SCELSE Summer Course 2026: Experimental Design and Data Analysis* (Version 1.0) [Course materials]. Zenodo. https://doi.org/10.5281/zenodo.20922744
 
-Repository: https://github.com/ezesantillan/SCELSE-summer-course-experimental-design-data-analysis
+Repository:
+https://github.com/ezesantillan/SCELSE-summer-course-experimental-design-data-analysis
 
-Course website: https://ezesantillan.github.io/SCELSE-summer-course-experimental-design-data-analysis/
-
-A DOI-linked archival version will be added after the first GitHub release is archived through Zenodo.
+Course website:
+https://ezesantillan.github.io/SCELSE-summer-course-experimental-design-data-analysis/
 
 © 2026 Ezequiel Santillan. Materials may be reused and adapted for non-commercial educational purposes with attribution.
