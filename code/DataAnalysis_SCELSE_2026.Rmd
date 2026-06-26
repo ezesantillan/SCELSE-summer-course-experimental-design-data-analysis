@@ -1,0 +1,2220 @@
+---
+title: "Hands-on session: Data Analysis - Microbial communities (SCELSE Summer Course 2026)"
+author: "Dr. Ezequiel Santillan"
+date: "2026-June-26"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    theme: cerulean
+    highlight: tango
+fontsize: 11pt
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+# Optional for interactive use.
+# Mainly controls appearance of knitted HTML output.
+# No need to run during class unless creating the HTML report
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center"
+)
+```
+
+[Script tested in R-version 4.4.1 // 2026-June-24]
+
+**R Markdown**
+
+This is an R Markdown document. Markdown is a simple formatting syntax
+for authoring HTML, PDF, and MS Word documents. For more details on
+using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that
+includes both content as well as the output of any embedded R code
+chunks within the document. 
+
+**ACKNOWLEDGEMENTS** Dr Ezequiel (Ziggy) Marzinelli, original designer
+of the Corallina sp. activity, including data and most of the
+beta-diversity analysis code below. Such code below was expanded from
+the SCELSE Summer Course 2019's Data Analysis Hands-on session, which I
+helped Ziggy to conduct. Thanks also to Dr Soheil A. Neshat for bits
+of code to help the script run in later R-versions and valuable
+assistance during the teaching session.
+
+**Remove every object, start with a clean session**
+
+```{r chunk_clean_session}
+rm(list=ls())
+
+```
+
+**Set Working directory** Set the Working directory where you have saved
+the data files. You can do this by going to the tab 'Session' -\> 'set
+working directory' -\> 'choose directory'
+
+You can also do this by using code, e.g.: In my computer, it would be:
+
+```{r chunk_set_directory}
+setwd("/Users/esantillan/OneDrive - Nanyang Technological University/SCELSE/Summer Course/2026/Data Analysis")
+```
+
+**Install and Load Packages** The traditional ways to install and load a
+package is: *install.packages('ggplot2')* To install a package, we only
+need to do this once.
+
+To load a package, we use the following: *library(ggplot2)*
+
+Alternatively, the function below ('packs') checks if the required
+packages to run the code below are installed. [Code chunk courtesy of Soheil]
+If the package is installed it will load the package, else it will
+install the package and their dependencies (other packages that are also
+required) and load the package.
+
+```{r chunk_packages}
+packs<-function(){
+  for (package in c('vegan','ggplot2','ggpubr','rstatix','mvabund','car','pillar',
+                    'tidyverse','multcompView','xfun','dplyr','tidyr','DiagrammeR'))
+    {
+    if (!require(package,character.only = T, quietly = T)){
+      install.packages(package, dependencies = TRUE)
+      library(package,character.only = T)
+    }else{
+      library(package,character.only = T)
+      print(package)
+    }
+  }
+}
+packs()
+```
+
+# CASE 1: Bacterial communities in wastewater treatment bioreactors
+
+*SEE EXPLANATORY SLIDES*
+
+## OBSERVATIONS, MODEL and HYPOTHESIS
+
+**Observations** Previous experiments with activated sludge bioreactors
+subjected to 3-chloroaniline disturbance showed that intermediate
+frequencies of disturbance demonstrated higher α-diversity and relative
+influence of stochastic assembly compared to other exposure levels,
+after a succession period of 35 days (**Santillan et al., npj Biofilms 
+Microbiomes 5, 8 (2019)**, https://doi.org/10.1038/s41522-019-0079-4).
+
+**Model** A possible explanation is that intermediate disturbance
+frequencies gave rise to unpredictable environments for organisms
+rendering their specialized traits less advantageous, stochastic
+equalization of competitive advantages across the overall pool of
+organisms would lead to a higher α-diversity. In contrast, either no
+disturbance or press disturbance conditions at the extreme ends of a
+disturbance range would allow fewer adapted organisms to dominate, thus
+lowering the α-diversity. We named this causal relationship the
+intermediate stochasticity hypothesis (ISH).
+
+**Hypothesis** If the model is true, then it is predicted that
+intermediate disturbance frequencies would promote stochastic assembly
+processes resulting in increased α-diversity.
+
+**Null Hypothesis** Intermediate disturbance frequencies would not
+promote stochastic assembly processes resulting in increased
+α-diversity.
+
+**Test: EXPERIMENTAL DESIGN** We used an experimental system comprised
+of activated sludge sequencing batch reactors harboring complex
+microbial communities collected from a full-scale wastewater treatment
+plant. These were subjected to different frequencies of alteration in
+the feeding scheme of the substrate by doubling the organic carbon
+content in the feed and keeping the nitrogen content constant. Such
+alteration represents a disturbance for activated sludge systems due to
+changes in competition for oxygen, substrate, and biofilm space. Indeed,
+organic loading shocks were shown to affect relevant functions in
+activated sludge systems, like carbon removal, sludge settleability, and
+nitrification, as well as the overall structure and assembly of the
+microbial community. In this study, the reactors had a working volume of
+25 mL, representing a microcosm scale. Replicates (n = 5) received
+double organic loading either never (L0, undisturbed), every 8, 6, 4, or
+2 days (L1-4, intermediately disturbed), or every day (L5, press
+disturbed), for 42 days (**Santillan and Wuertz, npj Biofilms Microbiomes 
+8, 41 (2022)**, https://doi.org/10.1038/s41522-022-00301-3).
+
+This design has one factor: 'Disturbance Frequency', fixed, categorical,
+with 6 levels: 0, 1, 2, 3, 4 and 5. Each level has 5 independent
+biological replicates (n = 5).
+
+Download a data file from Santillan & Wuertz 2022:
+<https://www.nature.com/articles/s41522-022-00301-3>
+<https://static-content.springer.com/esm/art%3A10.1038%2Fs41522-022-00301-3/MediaObjects/41522_2022_301_MOESM2_ESM.txt>
+
+```{r chunk_import_online_data}
+## Import the data matrix and the factors data, and give them a name
+dist_dat  <- read.table("https://static-content.springer.com/esm/art%3A10.1038%2Fs41522-022-00301-3/MediaObjects/41522_2022_301_MOESM2_ESM.txt", header = T) # Experimental data
+
+dist_dat$L <- as.factor(dist_dat$L) # Set L as a categorical variable
+
+# Lets see what are the variables in these data 
+str(dist_dat)  # display the internal structure of the object 'dist_dat'
+
+# Lets see if data were imported correctly
+view(dist_dat)
+
+## Change order of factor levels for plots so inoculum level "I" comes at the beginning:
+dist_dat$L <- factor(dist_dat$L, levels = c("I", "0", "1", "2", "3", "4", "5"))
+
+```
+
+## Q: Does α-diversity change with time?
+
+Let's first VISUALISE the data
+
+### Plot α-diversity (Hill number #2)
+
+```{r chunk_Hill_2_plot_1}
+H2_d <- ggplot(data = dist_dat, mapping = aes(x = d, y = H2))+
+               geom_point(size = 1, alpha = 1)
+               
+H2_d
+```
+
+```{r chunk_Hill_2_plot_2}
+### We can modify aesthetics and color by disturbance level "L"
+H2_d <- ggplot(data = dist_dat, mapping = aes(x = d, y = H2))+
+               geom_point(aes(color = L), size = 2, alpha = 0.5)+
+               theme_linedraw()+
+               theme(
+                      panel.grid.major = element_blank(), 
+                      panel.grid.minor = element_blank(),
+                      axis.text.x = element_text(angle = 90),
+                      text = element_text(size = 24)
+                      )
+
+H2_d
+```
+
+In this design, all 30 reactors across six disturbance levels started
+from the same sludge inoculum. Four samples were randomly selected on
+d0, these are assumed to represent initial conditions for all reactors
+For temporal dynamics analysis, we can set the "I" level data as the d0
+condition across all disturbance levels Data set is then processed to
+remove level "I" and distribute inoculum sample values across all six
+disturbance treatment levels for d0
+
+TIP: We can ask ChatGPT (<https://chatgpt.com/>) for help coding this.
+See example result below:
+
+```{r chunk_day_0_data}
+
+    # Step 1: Filter out rows where L == "I"
+    rows_to_duplicate <- dist_dat[dist_dat$L == "I", ]
+
+    # Step 2: Create a new data frame with the filtered rows
+    original_data <- dist_dat[dist_dat$L != "I", ]
+
+    # Step 3: Modify the L value in the new data frame to include all values except "I"
+    new_rows <- do.call(rbind, lapply(unique(original_data$L), function(l_value) {
+                       rows_to_duplicate$L <- l_value
+                       rows_to_duplicate
+                       }))
+
+    # Step 4: Combine the modified rows back into the original data frame
+    dist_dat_d0  <- rbind(original_data, new_rows)
+
+# Let's see the structure of the modified data frame
+str(dist_dat_d0)
+
+# View the modified data frame
+view(dist_dat_d0)
+
+# Set L as a categorical variable
+dist_dat_d0$L <- as.factor(dist_dat_d0$L) 
+```
+
+### Smooth lines of α-diversity (Hill number #2) vs day faceted by Level:
+
+```{r chunk_Hill_2_plot_3}
+H2_d <- ggplot(data = dist_dat_d0, mapping = aes(x = d, y = H2))+
+               geom_point(size = 3, alpha = 0.5)+
+               facet_grid(. ~ L)+
+               geom_smooth(alpha = 0.5, se = TRUE, level = 0.95)+ # se = TRUE to show confidence intervals, e.g. "we are 95% confident that the parameter Y is between Y_low and Y_high"
+               theme_linedraw()+
+               theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+               theme(axis.text.x = element_text(angle = 90))+
+               theme(text = element_text(size=24))
+               
+
+H2_d
+```
+```{r chunk_COD_plot_3}
+COD_d <- ggplot(data = dist_dat_d0, mapping = aes(x = d, y = COD))+
+               geom_point(size = 3, alpha = 0.5)+
+               #facet_grid(. ~ L)+
+               #geom_smooth(alpha = 0.5, se = TRUE, level = 0.95)+ # se = TRUE to show confidence intervals, e.g. "we are 95% confident that the parameter Y is between Y_low and Y_high"
+               theme_linedraw()+
+               theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+               theme(axis.text.x = element_text(angle = 90))+
+               theme(text = element_text(size=24))
+               
+
+COD_d
+```
+
+
+Here 'loess' stands for "locally estimated scatterplot smoothing", see:
+<https://en.wikipedia.org/wiki/Local_regression>
+
+## Q: Is diversity different across groups?
+
+Note that measurements taken at different time-points are not treated as
+replicates (this would be pseudo-replication)
+
+Rather, each time point considered here is a snap-shot where we can
+evaluate our question.
+
+Note about Time: A key aspect that differentiates time-series problems
+from most other statistical problems is that in a time series,
+observations are not mutually independent. Rather a single chance event
+may affect all later data points. This makes time-series analysis quite
+different from most other areas of statistics.
+
+Such topic is beyond the scope of this course.
+
+```{r chunk_data_d42}
+### Filter data per day for statistical tests
+dat_d42 <- filter(dist_dat, d == 42) #Data from d42 only        
+
+### Get summary statistics (See: https://www.datanovia.com/en/lessons/compute-summary-statistics-in-r/)
+sum_stats_d42 <- summarise(
+                   group_by(
+                     dat_d42, L
+                   ),
+                   n = n(),
+                   mean = mean(H2),
+                   sd = sd(H2),
+                   min = min(H2),
+                   max = max(H2)
+                   ) 
+
+# Print the resulting data frame
+print(sum_stats_d42)
+```
+
+### Visualize the filtered data for Hill #2 in a box plot:
+
+```{r chunk_Hill_2_d42}
+boxP_H2 <- ggplot(data = dat_d42, mapping = aes(x = L, y = H2))+
+                  geom_boxplot(notch = FALSE, fill = "lightgray", width = 0.3, outlier.size = 2)+
+                  stat_summary(fun = mean, geom = "point", #This is to add the mean values to our plot
+                               shape = 18, size = 4, color = "darkred", alpha = 0.6)+
+                  geom_jitter(width = 0.1, alpha = 0.4)+ #This is to draw the data points too
+                  theme_linedraw()+
+                  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+                  theme(axis.text.x = element_text(angle = 0))+
+                  theme(text = element_text(size=24))
+
+boxP_H2  # See plot
+```
+
+Elements of the box plots: - Tukey-style whiskers (most extreme data
+point that is no more than 1.5 IQR from the edge of the box) - Red
+diamond is the mean - Horizontal line is the median (Q2) - Lower box
+edge is the lower quartile (Q1) - Upper box edge is the upper quartile
+(Q3)
+
+*SEE EXPLANATORY SLIDES*
+
+## Q: Is diversity significantly different across groups?
+
+### Welch's One-Way ANOVA Test:
+
+Tests for equal means in a one-way design (not assuming equal variance).
+
+This is is an alternative to the standard one-way ANOVA in the situation
+where the homogeneity of variance assumption is violated, which is
+usually the case for microbial systems.
+
+```{r chunk_Hill_2_test}
+H2_d42_test <- welch_anova_test(dat_d42, H2 ~ L)
+
+   print(H2_d42_test)
+```
+
+We tested whether Hill diversity (H2) differed among treatments using Welch’s ANOVA. Like a standard one-way ANOVA, this test evaluates whether the variation among treatment means is larger than expected from the variation observed within treatments, but without assuming equal variances across groups, a condition that is often violated in microbial ecology datasets due to heterogeneous community responses and variability among treatments. The test detected a significant overall effect of treatment on H2 (Welch’s F = 23.88, df = 5, 10.92, P = 1.55 × 10⁻⁵), indicating strong evidence that not all treatment groups have the same mean Hill 2 diversity and that at least some groups differ from each other.
+
+We can include the P-value value into the Hill 2 plot we made above.
+
+```{r chunk_Hill_2_d42_anova_overlay}
+# Extract p-value
+p_val <- H2_d42_test$p
+
+# Format p-value for display
+p_text <- ifelse(p_val < 0.001, "P < 0.001", paste0("P = ", signif(p_val, 3)))
+
+# Add the text to the plot
+boxP_H2 +
+  geom_text(data = data.frame(), 
+            aes(x = -Inf, y = -Inf, label = p_text), 
+            hjust = -0.1, vjust = -1.2, size = 6, inherit.aes = FALSE)
+```
+
+## Q: Which groups are significantly different from each other in terms of diversity?
+
+### Games-Howell Post-Hoc testing:
+
+Performs a Games-Howell test, which is used to compare all possible
+combinations of group differences when the assumption of homogeneity of
+variances is violated. This post hoc test provides confidence intervals
+for the differences between group means and shows whether the
+differences are statistically significant.
+
+The test is based on Welch's degrees of freedom correction and uses
+Tukey's studentized range distribution for computing the p-values. The
+test compares the difference between each pair of means with appropriate
+adjustment for the multiple testing. So there is no need to apply
+additional p-value corrections.
+
+```{r chunk_Hill_2_post_hoc}
+H2_d42_PH_group  <- games_howell_test(dat_d42, H2 ~ L)
+
+  print(H2_d42_PH_group)
+```
+
+**Interpreting the output of the Games-Howell test** - Levels 0, 1 and 4
+are not significantly different [Group A] - Levels 1, 2, 3 and 4 are not
+significantly different [Group B] - Level 5 are significantly different
+from all other levels [Group C]
+
+The package 'multcompView' can help us automate this analysis as follows.
+
+```{r chunk_Hill_2_groups}
+# Create vector of p-values with comparisons
+pvals <- H2_d42_PH_group %>%
+  mutate(comp = paste(group1, group2, sep = "-")) %>%
+  select(comp, p.adj) %>%
+  deframe()
+
+# Generate group letters
+group_letters <- multcompLetters(pvals, threshold = 0.05)
+
+# Print group assignments
+print(group_letters$Letters)
+
+# Count number of distinct groups
+n_groups <- length(unique(group_letters$Letters))
+cat("There are", n_groups, "statistically distinct groups.\n")
+```
+Note that this package identifies 4 different groups instead of 3, considering "ab" as a different group.
+
+We can include this information into the Hill 2 plot.
+
+```{r chunk_Hill_2_d42_groups_overlay}
+# Create vector of p-values with comparisons
+pvals <- H2_d42_PH_group %>%
+  mutate(comp = paste(group1, group2, sep = "-")) %>%
+  select(comp, p.adj) %>%
+  deframe()
+
+# Generate group letters
+group_letters <- multcompLetters(pvals, threshold = 0.05)
+
+# Convert to a data frame for plotting
+group_labels <- data.frame(
+  L = factor(names(group_letters$Letters), levels = levels(dat_d42$L)),
+  label = group_letters$Letters
+)
+
+# Overlay group letters onto the boxplot
+boxP_H2 +
+  geom_text(data = group_labels, aes(x = L, y = max(dat_d42$H2) + 3, label = label),
+            size = 6, vjust = 0)
+```
+
+We can include both the Welch's ANOVA P-value and Games-Howell post-hoc grouping into the Hill 2 plot.
+
+```{r chunk_Hill_2_d42_groups_pval_overlay}
+library(multcompView)
+library(dplyr)
+
+# Generate group letters
+pvals <- H2_d42_PH_group %>%
+  mutate(comp = paste(group1, group2, sep = "-")) %>%
+  select(comp, p.adj) %>%
+  deframe()
+
+group_letters <- multcompLetters(pvals, threshold = 0.05)
+
+group_labels <- data.frame(
+  L = factor(names(group_letters$Letters), levels = levels(dat_d42$L)),
+  label = group_letters$Letters
+)
+
+# Format Welch's ANOVA p-value
+p_val <- H2_d42_test$p
+p_text <- ifelse(p_val < 0.001, "P < 0.001", paste0("P = ", signif(p_val, 3)))
+
+# Combine both overlays
+boxP_H2 +
+  geom_text(data = group_labels, aes(x = L, y = max(dat_d42$H2) + 3, label = label),
+            size = 6, vjust = 0) +
+  geom_text(data = data.frame(), aes(x = -Inf, y = -Inf, label = p_text),
+            hjust = -0.1, vjust = -1.2, size = 6, inherit.aes = FALSE)
+```
+
+
+
+*SEE EXPLANATORY SLIDES*
+
+
+
+
+# CASE 2: Macroalga-associated bacterial communities
+
+Ziggy's 2019 Hands-on example (w/ add-ons from Eze). For the hands-on
+session on statistics, we will analyse microbial community data obtained
+via sequencing. As explained during the lectures, these data are
+'multivariate', i.e. it can be described as a matrix of n samples x p
+variables (e.g. OTUs or ASVs).
+
+Typically, those samples come from different groups (categories or
+factors), or are taken from a continous environmental gradient (e.g.
+soil samples across a pH gradient). In this example, samples are
+host-associated bacterial communities, where the host is a species of
+seaweed (macroalga), which was sampled from different places.
+
+*SEE EXPLANATORY SLIDES*
+
+## OBSERVATIONS, MODEL and HYPOTHESIS
+
+**Observations** Previous experiments showed that the settlement of
+sea-urchin larvae is influenced by a species of seaweed, Corallina sp.,
+which occurs in similar abundances across Sydney Harbour, Australia.
+
+Some bays within Sydney Harbour have storm-water drains, while others
+don't. Storm-water can transport nasty contaminants from land to the
+water, which can affect biodiversity. The presence and amounts of
+contaminants such as agrochemicals, heavy metals, etc. have been shown
+to be significantly greater in bays with storm-water drains than in bays
+without drains.
+
+Sampling of sea-urchin larvae in highly contaminated bays (+ drains) and
+those with low contamination levels (no drains) showed that there is
+much lower settlement in the high contamination places.
+
+Seaweeds produce chemicals that can influence the structure of
+surface-associated microbiomes. **Model 1** One possible model or
+explanation for the differences in the observed larval settlement
+patterns is that the microbial communities associated to Corallina sp.
+in high vs low contaminated areas are different, and may therefore
+produce different settlement cues, influencing differential settlement
+of sea-urchin larvae.
+
+**Hypothesis 1** If the model is true, then it is predicted that the
+microbial community structure would differ between high vs low
+contaminated areas.
+
+**EXPERIMENTAL DESIGN**
+
+Microbial communities on Corallina were sampled at 4 highly contaminated
+bays and 4 bays with low levels of contamination. n=3 seaweed
+individuals were sampled in each bay.
+
+NOTE that there needs to be replication of bays for both high vs low
+contamination because of the issue of replication at the right level
+(see Experimental Design lectures).
+
+Therefore, we have 2 factors (categorical covariates): -
+'Contamination', fixed, with 2 levels: High vs Low - 'Site', random,
+nested within Contamination, with 4 sites for each contamination level
+
+EXERCISE: Draw an schematic of the experimental design.
+We can also use the package DiagrammeR to do so, as follows:
+
+```{r chunk_design_schematic}
+grViz("
+digraph experimental_design {
+
+  # Node definitions
+  node [shape=box, style=rounded]
+
+  Contamination [label='Contamination']
+  Low [label='Low']
+  High [label='High']
+
+  # Sites for Low Contamination
+  a [label='Site a']
+  b [label='Site b']
+  c [label='Site c']
+  d [label='Site d']
+
+  # Sites for High Contamination
+  e [label='Site e']
+  f [label='Site f']
+  g [label='Site g']
+  h [label='Site h']
+
+  # Edges
+  Contamination -> Low
+  Contamination -> High
+
+  Low -> a
+  Low -> b
+  Low -> c
+  Low -> d
+
+  High -> e
+  High -> f
+  High -> g
+  High -> h
+}
+")
+
+```
+
+
+**Microbial Data** We have a matrix of samples x variables, in this case
+OTU (bacterial classes).
+
+We can compare communities between the macroalgal hosts by doing
+dimension reduction on the data through: (1) alpha diversity univariate
+analyses (2) distance-based beta-diversity multivariate analyses
+
+## Alpha diversity analyses to compare community structure
+
+The datasets used in this practical are hosted in the public course GitHub repository and are imported directly from there. This avoids the need to download files or configure working directories, ensuring that the code runs identically across operating systems.
+
+```{r chunk_data_import}
+## Import the data matrix and the factors data directly from the course GitHub repository
+
+Dat <- read.delim(
+  "https://raw.githubusercontent.com/ezesanti/SCELSE-summer-course-experimental-design-data-analysis/main/data/OTU.txt",
+  row.names = 1
+)        # OTU data
+
+Fac1 <- read.delim(
+  "https://raw.githubusercontent.com/ezesanti/SCELSE-summer-course-experimental-design-data-analysis/main/data/Factors.txt",
+  row.names = 1
+)        # Factor metadata
+
+# Let's see if the data were imported correctly
+head(Dat)
+head(Fac1)
+
+# Let's inspect the variables in these datasets
+str(Dat)   # display the internal structure of the object 'Dat'
+str(Fac1)
+
+# How many samples and variables does the data matrix contain?
+dim(Dat)
+
+# 45 variables (OTUs), 24 samples
+# (2 contamination levels × 4 sites within each contamination level × 3 replicates = 24)
+```
+
+### Data Pre-processing
+
+Below are the usual steps that people working on similar datasets apply.
+However, see McMurdie & Holmes 2014, PLOS Comput. Biol.
+<https://doi.org/10.1371/journal.pcbi.1003531> and also see Weiss et al.
+2017, Microbiome. <https://doi.org/10.1186/s40168-017-0237-y>.
+
+```{r chunk_data_preprocessing}
+tDat = t(Dat) # transpose the data as vegan wants variables (taxa, OTUs, ASVs, etc.) as columns
+
+S <- specnumber(tDat) # observed number of species (Richness)
+head(S)
+range(S) # We observe that richness varies from 15 to 26 taxa, but we didn't account yet for differences in sequencing depth
+
+#install.packages('vegan') #need to install this if you haven't
+#library(vegan) #load the R package 'vegan
+
+# Higher order alpha diversity indices  (Hill, 1973)
+H0 <- S #Renaming richness to Hill #0
+H1 <- exp(diversity(tDat, index = "shannon"))
+H2 <- diversity(tDat, index = "invsimpson")
+
+# Make a dataframe with Hill numbers (including metadata)
+Hill <- data.frame(Fac1, H0, H1, H2)
+head(Hill)
+
+## Change order of factor levels for plots so that "Low" comes first:
+Hill$Contamination <- factor(Hill$Contamination, levels = c("Low", "High"))
+```
+
+**Visualize the data** install.packages('ggplot2') #need to install this
+if you haven't library(ggplot2) #load the R package 'ggplot2'
+
+###Plot Hill numbers using box plots - Tukey-style whiskers (most
+extreme data point that is no more than 1.5 IQR from the edge of the
+box) - Red diamond is the mean - Horizontal line is the median (Q2) -
+Lower box edge is the lower quartile (Q1) - Upper box edge is the upper
+quartile (Q3)
+
+#### Hill #0 (Richness) alpha diversity:
+
+```{r chunk_e19e33}
+box_H0 <- ggplot(data = Hill, mapping = aes(x = Contamination, y = H0))+
+                 geom_boxplot(notch = FALSE, fill = "lightgray", width = 0.3, outlier.size = 2)+
+                 stat_summary(fun = mean, geom = "point", #To add the mean values to our plot
+                              shape = 18, size = 4, color = "darkred", alpha = 0.6)+
+                 geom_jitter(width = 0.15, alpha = 0.4)+ #To draw the data points too      
+                 theme_linedraw()+
+                 theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+                 theme(axis.text.x = element_text(angle = 0))+
+                 theme(text = element_text(size=15))
+
+box_H0  # See plot
+```
+
+#### Hill #1 (exp. Shannon index) alpha diversity
+
+```{r chunk_d43b76}
+box_H1 <- ggplot(data = Hill, mapping = aes(x = Contamination, y = H1))+
+                 geom_boxplot(notch = FALSE, fill = "lightgray", width = 0.3, outlier.size = 2)+
+                 stat_summary(fun = mean, geom = "point", #To add the mean values to our plot
+                              shape = 18, size = 4, color = "darkred", alpha = 0.6)+
+                 geom_jitter(width = 0.15, alpha = 0.4)+ #To draw the data points too      
+                 theme_linedraw()+
+                 theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+                 theme(axis.text.x = element_text(angle = 0))+
+                 theme(text = element_text(size=15))
+
+box_H1  # See plot
+```
+
+#### Hill #2 (inverse Simpson) alpha diversity
+
+```{r chunk_a4f300}
+box_H2 <- ggplot(data = Hill, mapping = aes(x = Contamination, y = H2))+
+                 geom_boxplot(notch = FALSE, fill = "lightgray", width = 0.3, outlier.size = 2)+
+                 stat_summary(fun = mean, geom = "point", #To add the mean values to our plot
+                              shape = 18, size = 4, color = "darkred", alpha = 0.6)+
+                 geom_jitter(width = 0.15, alpha = 0.4)+ #To draw the data points too      
+                 theme_linedraw()+
+                 theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+                 theme(axis.text.x = element_text(angle = 0))+
+                 theme(text = element_text(size=15))
+
+box_H2  # See plot
+```
+
+#### Hill numbers 0, 1, and 2
+
+We can visualize these together by using the 'ggarrange' function from
+the package 'ggpubr' install.packages('ggpubr') #need to install this if
+you haven't library(ggpubr) #load the R package 'ggpubr'
+
+```{r chunk_5e1a04}
+ggarrange(box_H0, box_H1, box_H2, ncol = 3, nrow = 1) ### See plots
+```
+
+**Interpretation of alpha-diversity plots** We observe that there are
+differences in higher order Hill number indexes, meaning that
+communities may be different not in composition but in relative
+abundances.
+
+There also seems to be higher variability of H1 and H2 at Low
+contamination sites than for High contamination ones
+
+But: Where are the 12 points distributed along these box plots? Note
+that there are also four different sites sampled per each level of
+contamination.
+
+### Raincloud Plots
+
+A more informative (and fancier) alternative are Raincloud Plots. See:
+<https://www.cedricscherer.com/2021/06/06/visualizing-distributions-with-raincloud-plots-with-ggplot2/#back1>
+
+```{r chunk_822728}
+#For R-versions above 3.6.3, you might need to set these below as factors
+Fac1$Contamination<-as.factor(Fac1$Contamination)
+Fac1$Site<-as.factor(Fac1$Site)
+```
+
+#### Hill #0 rain-cloud plot:
+
+```{r chunk_208841}
+rc_H0 <- ggplot(data = Hill, aes(x = Contamination, y = H0)) + 
+         ## add half-violin from {ggdist} package
+                ggdist::stat_halfeye(
+         ## custom bandwidth
+                adjust = .5, 
+         ## adjust height
+                width = .35, 
+         ## move geom to the right
+                justification = -.35, 
+         ## remove slab interval
+                .width = 0, 
+                point_colour = NA
+               ) + 
+         ## add dot plots from {ggdist} package
+            ggdist::stat_dots(
+         ## orientation to the left
+                           side = "left", 
+         ## move geom to the left
+                           justification = 1.15, 
+         ## adjust grouping (binning) of observations 
+                           binwidth = .15,
+         ## adjust dot size
+                           dotsize = 1.4,
+         ## color by site
+                           color = c("black","red","blue","orange","brown","green","yellow","cyan") [as.numeric(Fac1$Site)]
+                            ) + 
+         ## remove white space on the left
+            coord_cartesian(xlim = c(1.2, NA))+
+         #Now add previous code for box-plot, mean, aesthetics, etc.
+         geom_boxplot(notch = FALSE, fill = "lightgray", width = 0.15, outlier.size = 1)+
+                      stat_summary(fun = mean, geom = "point",
+                      shape = 18, size = 3, color = "darkred", alpha = 0.5)+
+                      theme_linedraw()+
+                      theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+                      theme(axis.text.x = element_text(angle = 0))+
+                      theme(text = element_text(size=15))
+
+rc_H0 #See plot
+```
+
+#### Hill #1 rain-cloud plot
+
+```{r chunk_650be7}
+rc_H1 <- ggplot(data = Hill, aes(x = Contamination, y = H1)) + 
+  ## add half-violin from {ggdist} package
+  ggdist::stat_halfeye(
+    ## custom bandwidth
+    adjust = .4, 
+    ## adjust height
+    width = .20, 
+    ## move geom to the right
+    justification = -.75, 
+    ## remove slab interval
+    .width = 0, 
+    point_colour = NA
+  ) + 
+  ## add dot plots from {ggdist} package
+  ggdist::stat_dots(
+    ## orientation to the left
+    side = "left", 
+    ## move geom to the left
+    justification = 1.15, 
+    ## adjust grouping (binning) of observations 
+    binwidth = .15,
+    ## adjust dot size
+    dotsize = 0.8,
+    ## color by site
+    color = c("black","red","blue","orange","brown","green","yellow","cyan") [as.numeric(Fac1$Site)]
+  ) + 
+  ## remove white space on the left
+  coord_cartesian(xlim = c(1.2, NA))+
+  #Now add previous code for box-plot, mean, aesthetics, etc.
+  geom_boxplot(notch = FALSE, fill = "lightgray", width = 0.15, outlier.size = 1)+
+  stat_summary(fun = mean, geom = "point",
+               shape = 18, size = 3, color = "darkred", alpha = 0.5)+
+  theme_linedraw()+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  theme(axis.text.x = element_text(angle = 0))+
+  theme(text = element_text(size=15))
+
+rc_H1 #See plot
+```
+
+#### Hill #2 rain-cloud plot
+
+```{r chunk_20a719}
+rc_H2 <- ggplot(data = Hill, aes(x = Contamination, y = H2)) + 
+  ## add half-violin from {ggdist} package
+  ggdist::stat_halfeye(
+    ## custom bandwidth
+    adjust = .3, 
+    ## adjust height
+    width = .16, 
+    ## move geom to the right
+    justification = -.85, 
+    ## remove slab interval
+    .width = 0, 
+    point_colour = NA
+  ) + 
+  ## add dot plots from {ggdist} package
+  ggdist::stat_dots(
+    ## orientation to the left
+    side = "left", 
+    ## move geom to the left
+    justification = 1.15, 
+    ## adjust grouping (binning) of observations 
+    binwidth = .15,
+    ## adjust dot size
+    dotsize = 0.6,
+    ## color by site
+    color = c("black","red","blue","orange","brown","green","yellow","cyan") [as.numeric(Fac1$Site)]
+  ) + 
+  ## remove white space on the left
+  coord_cartesian(xlim = c(1.2, NA))+
+  #Now add previous code for box-plot, mean, aesthetics, etc.
+  geom_boxplot(notch = FALSE, fill = "lightgray", width = 0.15, outlier.size = 1)+
+  stat_summary(fun = mean, geom = "point",
+               shape = 18, size = 3, color = "darkred", alpha = 0.5)+
+  theme_linedraw()+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  theme(axis.text.x = element_text(angle = 0))+
+  theme(text = element_text(size=15))
+
+rc_H2 #See plot
+```
+
+#### Arrangle rain-cloud plots for all three Hill indexes:
+
+```{r chunk_103c25}
+ggarrange(rc_H0, rc_H1, rc_H2, ncol = 3, nrow = 1) ### See plots
+```
+
+**Interpretation** Are the observed differences significant? Now that we
+have visualized the data, we can run a few tests to see if the
+differences we observe are statistically significant
+
+### Hypothesis testing:
+
+#### One-way ANOVA tests
+
+Site nested in Contamination is random, i.e. that term gives information
+on variability in communities between sites. Our main interest is in the
+effect of contamination. Is this significant? What does this mean?
+
+The code below indicates that we are fitting an ANOVA model where Site
+is nested within Contamination. The '/' operator specifies this nesting,
+meaning that Site is a subcategory within each Contamination level.
+
+##### ANOVA on Hill #0
+
+```{r chunk_8142e8}
+nest_H0 <- aov(Hill$H0 ~ Hill$Contamination / factor(Hill$Site)) # the '/' means that Site is nested within Contamination
+summary(nest_H0)
+```
+
+##### ANOVA on Hill #1
+
+```{r chunk_49affb}
+nest_H1 <- aov(Hill$H1 ~ Hill$Contamination / factor(Hill$Site)) # the '/' means that Site is nested within Contamination
+summary(nest_H1)
+```
+
+##### ANOVA on Hill #2
+
+```{r chunk_27e9a4}
+nest_H2 <- aov(Hill$H2 ~ Hill$Contamination / factor(Hill$Site)) # the '/' means that Site is nested within Contamination
+summary(nest_H2)
+```
+
+#### Interpreting the Components of the ANOVA Table:
+
+##### Degrees of Freedom (Df):
+
+- **Hill$Contamination**: 1 degree of freedom. This reflects the number of independent groups for the factor **Contamination** (e.g., High vs Low).
+- **Hill$Site (nested within Contamination)**: 6 degrees of freedom. This represents the number of independent ways by which **Sites within each Contamination level** can vary.
+- **Residuals**: 16 degrees of freedom. This reflects the leftover, unexplained variation in the response variable.
+
+##### Sum of Squares (Sum Sq):
+
+- **Hill$Contamination**: 28.515. This represents the variation in the response variable that can be attributed to differences between Contamination levels.
+- **Hill$Site (nested within Contamination)**: 21.905. This represents the variation attributed to differences among Sites within each Contamination level.
+- **Residuals**: 3.585. This is the unexplained variation (error) in the response variable.
+
+##### Mean Squares (Mean Sq):
+
+- **Hill$Contamination**: 28.515. Calculated as Sum Sq / Df for **Contamination**.
+- **Hill$Site (nested within Contamination)**: 3.651. Calculated as Sum Sq / Df for **Site** within Contamination.
+- **Residuals**: 0.224. Calculated as Sum Sq / Df for the residuals.
+
+##### F value:
+
+- **Hill$Contamination**: 127.3. The ratio of the Mean Sq for **Contamination** to the Mean Sq for **Site nested within Contamination** (28.515 / 3.651). In nested designs, this is the correct denominator to test the effect of Contamination.
+- **Hill$Site (nested within Contamination)**: 16.3. The ratio of the Mean Sq for **Site** to the Mean Sq for the Residuals (3.651 / 0.224).
+
+##### Pr(>F):
+
+- **Hill$Contamination**: 5.01e-09. The p-value for the F-test of **Contamination**, accounting for the nested structure. A very small p-value indicates a highly significant effect of Contamination.
+- **Hill$Site (nested within Contamination)**: 5.27e-06. The p-value for the F-test assessing variability among Sites within each Contamination level.
+
+##### Significance Codes:
+
+**\*\*\***: p-value ≤ 0.001, indicating very strong evidence against the null hypothesis.
+
+##### Interpretation:
+
+- There is a highly significant effect of **Contamination** on the response variable, as indicated by the large F value (127.3) and the very small p-value (5.01e-09).
+- There are also significant differences among **Sites within Contamination levels**, supported by the F value (16.3) and p-value (5.27e-06).
+- The **Residuals** represent remaining unexplained variation, which is relatively small compared to the explained variation.
+
+##### Conclusion:
+
+The nested ANOVA shows that both the **Contamination** factor and the variability among **Sites within each Contamination level** contribute significantly to overall variation in the response variable. The structure of the nested design was properly accounted for, and the results indicate clear differences between Contamination levels and among Sites within those levels.
+
+### ANOVA assumptions
+
+But wait, are the test's assumptions met? 
+1) Normality 
+2) Non-heteroscedasticity (constancy of variance) 
+3) Observations are independent \<--- This depends on the experimental design!
+
+#### Normality assumption:
+
+**Shapiro-Wilk normality test** When p-values are greater than the
+significance level 0.05, this implies that the distribution of the data
+is not significantly different from the normal distribution. In other
+words, we can assume normality.
+
+##### Shapiro-Wilk normality test on Hill numbers
+
+```{r chunk_fa8454}
+shapiro.test(Hill$H0)
+
+shapiro.test(Hill$H1)
+
+shapiro.test(Hill$H2)
+```
+
+##### Q-Q plots:
+
+An alternative is to visually inspect the data normality using Q-Q plots
+(quantile-quantile plots). Q-Q plots draw the correlation between a
+given sample and the normal distribution.
+
+```{r chunk_12dc43}
+ggqqplot(Hill$H0, ylab = "H0")
+
+ggqqplot(Hill$H1, ylab = "H1")
+
+ggqqplot(Hill$H2, ylab = "H2")
+```
+
+#### Constancy of variance
+
+**Levene Test (robust to non-normality)** The null hypothesis is that
+all populations variances are equal, the alternative hypothesis is that
+at least two of them differ. Consequently, p-values less than 0.05
+suggest variances are significantly different and the homogeneity of
+variance assumption has been violated.
+
+install.packages('rstatix') #need to install this if you haven't
+library(rstatix) #load the R package 'rstatix'
+
+##### Levene tests on Hill numbers:
+
+```{r chunk_b040af}
+levene_test(Hill$H0 ~ Hill$Contamination, data = Hill) 
+
+levene_test(Hill$H1 ~ Hill$Contamination, data = Hill) 
+
+levene_test(Hill$H2 ~ Hill$Contamination, data = Hill) 
+```
+
+Since the assumption of constancy of variance is not met, we need to use
+a test that does not assume equal variance.
+
+#### Welch one-way ANOVA test (not assuming equal variance, also robust against non-normality)
+
+```{r chunk_Welch_ANOVA_Hill_Case_2}
+Hill %>% welch_anova_test(H0 ~ Contamination / Site)  # the '/' means that Site is nested within Contamination
+
+Hill %>% welch_anova_test(H1 ~ Contamination / Site)  # the '/' means that Site is nested within Contamination
+
+Hill %>% welch_anova_test(H2 ~ Contamination / Site)  # the '/' means that Site is nested within Contamination
+```
+
+
+##### Explanation of the Output:
+
+The table presents the results of Welch's ANOVA for each of the response variables H0, H1, and H2. This method is robust to unequal variances and accommodates the nested design structure where **Site** is nested within **Contamination**.
+
+###### For H0:
+
+- **.y.**: The response variable tested, H0.
+- **n**: Number of observations, 24.
+- **statistic**: The F-statistic from Welch's ANOVA is 3.45, measuring the ratio of between-group to within-group variance.
+- **DFn**: Degrees of freedom for the numerator (between groups), 7.
+- **DFd**: Degrees of freedom for the denominator (within groups), approximately 6.70, adjusted for unequal variances.
+- **p**: 0.066. This p-value suggests that the differences among groups are not statistically significant at the 0.05 threshold.
+- **method**: Welch ANOVA, which adjusts for heterogeneity of variances.
+
+**Interpretation**: There is no statistically significant difference in H0 among the groups defined by Contamination and Site.
+
+###### For H1:
+
+- **.y.**: H1, the response variable.
+- **n**: 24 observations.
+- **statistic**: 62.82, indicating strong between-group differences relative to within-group variability.
+- **DFn**: 7.
+- **DFd**: Approximately 6.74.
+- **p**: 1.24e-05, a very small p-value indicating strong evidence against the null hypothesis.
+- **method**: Welch ANOVA.
+
+**Interpretation**: There are significant differences in H1 across the groups defined by the nested factor Contamination and Site.
+
+###### For H2:
+
+- **.y.**: H2, the response variable.
+- **n**: 24 observations.
+- **statistic**: 126.62, indicating very large between-group variability.
+- **DFn**: 7.
+- **DFd**: Approximately 6.21.
+- **p**: 3.01e-06, indicating extremely strong evidence against the null hypothesis.
+- **method**: Welch ANOVA.
+
+**Interpretation**: There are highly significant differences in H2 among the groups defined by Contamination and Site.
+
+##### General Notes:
+
+- The **DFn** (7) reflects the number of independent group comparisons being made, considering the nested design.
+- The **DFd** is adjusted for heterogeneity of variances; non-integer values are expected with Welch's ANOVA.
+- A small p-value (typically < 0.05) indicates statistically significant group differences.
+
+##### Conclusion:
+
+The Welch's ANOVA results show that:
+- For **H0**, there is no significant effect of Contamination and Site.
+- For **H1** and **H2**, there are significant and highly significant effects of Contamination and Site.
+- These results support the conclusion that Contamination and nested Site structure influence H1 and H2, with strong evidence of group differences.
+
+
+*SEE EXPLANATORY SLIDES*
+
+## Checking differences in sequencing depth
+
+Everything so far looks nice. BUT, are the counts across samples
+similar?
+
+```{r chunk_7d58a6}
+View(rowSums(tDat))   # What is the sum of counts for each sample?
+range(rowSums(tDat))  # There is as little as 336 counts for one sample
+                      # and as much as 5911 for another! (one order of magnitude diff.)
+```
+
+Presence-absence metrics and several Alpha diversity metrics are
+affected by differences in counts/reads across samples, thus we have to
+account for that if we are interested in such metrics.
+
+### Rarefaction curves
+
+One way to do this is to rarefy to the sample with the lower number of
+counts, which we can do using the Vegan package.
+
+```{r chunk_9465b9}
+(raremax <- min(rowSums(tDat))) #To rarefy to the sample with the lower number of counts
+Sr <- rarefy(tDat, raremax)
+plot(S, Sr, xlab = "Observed No. of taxa", ylab = "Rarefied No. of taxa")
+abline(0, 1)
+rarecurve(tDat, step = 20, sample = raremax, col = "blue", cex = 0.6)
+
+View(Sr)
+range(Sr)
+```
+
+We see that one sample 'ALB6' has clearly more reads than the others.
+This happens sometimes when samples were processed in different
+sequencing runs, which can introduce procedural bias to our analysis.
+
+Note that a lot of OTUs are trimmed in this case .Rarefaction is not
+good for this data set if you are interested in the rare OTUs / taxons
+(or ASVs, depending on your dataset).
+
+This procedure does work for other types of datasets, depending on your
+question. See some examples of our papers using ASV and Metagenomics
+data below: <https://www.nature.com/articles/s41522-022-00301-3>
+<https://www.nature.com/articles/s41522-019-0079-4>
+<https://journals.asm.org/doi/10.1128/msystems.00471-20?permanently=true#figS6>
+<https://pubs.acs.org/doi/10.1021/acsestwater.1c00018>
+
+### Alpha-diversity metrics on rarefied data
+
+Now we will re-calculate alpha-diversity metrics on the OTU matrix
+rarefied to the lowest number of counts.
+
+```{r chunk_13dcc5}
+Dat_r<-apply(tDat, 1, function(x)round(x/sum(x)*min(rowSums(tDat))))
+
+# The 'apply' function accepts vectors and matrices as input and can return vectors or matrices work in the rows. Here there is an 'apply' function with tDat matrix as input, 1 means apply the function on the rows, and the third argument is the function that we want to apply on each element of this matrix.
+
+# lets see if data were imported correctly
+head(Dat_r)
+
+# Lets see what are the variables in these data 
+str(Dat_r)  # display the internal structure of the object 'Dat_r'
+str(Fac1) 
+
+# how many samples and variables does my data matrix have?
+dim(Dat_r)
+# Same: 45 variables (OTUs), 24 samples (2 contamination levels x 4 sites ea. x 3 replicates = 24)
+
+tDat_r = t(Dat_r) # transpose the data as vegan wants variables (taxa, OTUs, ASVs, etc.) as columns
+```
+
+Make a new dataframe with Hill numbers based on rarefied data:
+
+```{r chunk_5bd853}
+S_r <- specnumber(tDat_r) # observed number of species (Richness)
+range(S_r) # We observe that richness varies now from 12 to 23 taxa, accounting for differences in sequencing depth
+
+# Hill alpha diversity indices  (Hill, 1973)
+H0_r <- S_r #Renaming richness to Hill #0
+H1_r <- exp(diversity(tDat_r, index = "shannon"))
+H2_r <- diversity(tDat_r, index = "invsimpson")
+
+# Make a dataframe with Hill numbers (including metadata)
+Hill_r <- data.frame(Fac1, H0_r, H1_r, H2_r)
+
+## Change order of factor levels for plots so that "Low" comes first:
+Hill_r$Contamination <- factor(Hill_r$Contamination, levels = c("Low", "High"))
+
+# View new dataframe
+view(Hill_r)
+```
+
+### Visualisation - Box plots
+
+#### Plot Hill numbers on rarefied data using box plots:
+
+```{r chunk_bf9e98}
+box_H0_r <- ggplot(data = Hill_r, mapping = aes(x = Contamination, y = H0_r))+
+  geom_boxplot(notch = FALSE, fill = "lightgray", width = 0.3, outlier.size = 2)+
+  stat_summary(fun = mean, geom = "point", #This is to add the mean values to our plot
+               shape = 18, size = 4, color = "darkred", alpha = 0.6)+
+  geom_jitter(width = 0.15, alpha = 0.4)+ #To draw the data points too      
+  theme_linedraw()+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  theme(axis.text.x = element_text(angle = 0))+
+  theme(text = element_text(size=15))
+
+box_H1_r <- ggplot(data = Hill_r, mapping = aes(x = Contamination, y = H1_r))+
+  geom_boxplot(notch = FALSE, fill = "lightgray", width = 0.3, outlier.size = 2)+
+  stat_summary(fun = mean, geom = "point", #This is to add the mean values to our plot
+               shape = 18, size = 4, color = "darkred", alpha = 0.6)+
+  geom_jitter(width = 0.15, alpha = 0.4)+ #To draw the data points too      
+  theme_linedraw()+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  theme(axis.text.x = element_text(angle = 0))+
+  theme(text = element_text(size=15))
+
+box_H2_r <- ggplot(data = Hill_r, mapping = aes(x = Contamination, y = H2_r))+
+  geom_boxplot(notch = FALSE, fill = "lightgray", width = 0.3, outlier.size = 2)+
+  stat_summary(fun = mean, geom = "point", #This is to add the mean values to our plot
+               shape = 18, size = 4, color = "darkred", alpha = 0.6)+
+  geom_jitter(width = 0.15, alpha = 0.4)+ #To draw the data points too      
+  theme_linedraw()+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  theme(axis.text.x = element_text(angle = 0))+
+  theme(text = element_text(size=15))
+
+ggarrange(box_H0_r, box_H1_r, box_H2_r, ncol = 3, nrow = 1) ### See plots
+```
+
+#### Unrarefied vs. rarefied alpha-diversity plots:
+
+```{r chunk_5ce50c}
+Plot <- ggarrange(box_H0,  box_H0_r, 
+          box_H1,  box_H1_r,
+          box_H2,  box_H2_r,  ncol = 2, nrow = 3) ### See plots side by side
+```
+
+We can compare these plots better if y-axes limits are the same, we can
+do this by adjusting their y-axes:
+
+```{r chunk_45b11f}
+box_H0 <- box_H0 + ylim(10,25)
+box_H0_r <- box_H0_r + ylim(10,25)
+box_H1 <- box_H1 + ylim(2,10)
+box_H1_r <- box_H1_r + ylim(2,10)
+box_H2 <- box_H2 + ylim(2,8)
+box_H2_r <- box_H2_r + ylim(2,8)
+
+#Let's look again at unrarefied vs. rarefied data
+ggarrange(box_H0,  box_H0_r, 
+          box_H1,  box_H1_r,
+          box_H2,  box_H2_r,  ncol = 2, nrow = 3) ### See plots side by side
+```
+
+You can also look at these data with raincloud plots, as we did above
+for unrarefied data.
+
+*SEE EXPLANATORY SLIDES*
+
+## Distance-based multivariate analyses to compare community structure
+
+**NOTE:** Some of the steps below may have happened already during the bioinformatics steps (e.g., normalization during pre-processing).
+
+---
+
+### Data Standardization
+
+We would like to account for sampling depth by using the relative abundance of the sequence counts. We will do this manually using a few steps:
+
+- We need to transpose the data if needed (samples should be in rows)  
+- Divide each sample by its total  
+- Multiply by 100 — this results in relative abundance (%)  
+
+**Note:** If you have already accounted for differences in sample depth in your pipeline (e.g., normalization, rarefaction, etc.), you don't need to do this step here.
+
+```{r chunk_rel_abund}
+## Calculate relative abundance (%)
+tDat1 <- tDat / rowSums(tDat) * 100  
+
+## View the resulting table to confirm the transformation
+view(tDat1)
+```
+
+---
+
+### Data Transformation
+
+We will calculate distances/dissimilarities between each pair of samples using the Bray-Curtis measure.
+
+To avoid focusing only on the few abundant taxa, it is a good idea to transform the data to give more weight to less abundant taxa and thus look at the "whole" community rather than just ~10 abundant taxa.
+
+We will use here a **square root transformation**, which reduces the influence of dominant taxa.
+
+```{r chunk_sqrt}
+## Apply square-root transformation to down-weight dominant taxa
+Dat1.sqrt <- sqrt(tDat1)
+
+## View transformed data
+view(Dat1.sqrt)
+```
+
+*SEE EXPLANATORY SLIDES*
+
+---
+
+### Calculate Bray-Curtis dissimilarity matrix
+
+```{r chunk_bc_dist}
+## Calculate Bray-Curtis dissimilarity matrix
+Dat1.bc <- vegdist(Dat1.sqrt, method = "bray")  
+
+## Many other distance measures exist — check ?vegdist for options
+## Example: Jaccard is useful for presence/absence analyses (composition only)
+
+## View the dissimilarity matrix (lower triangle format, hard to view!)
+Dat1.bc  
+
+## Optional: Convert to full symmetric matrix to view all pairwise distances
+# as.matrix(Dat1.bc)
+```
+
+The distances represent dissimilarity between samples, where:
+
+- 0 = exactly the same  
+- 1 = completely different  
+
+Note that some software can represent these values as similarity (1 - dissimilarity), so always pay attention to how distances are reported!
+
+*SEE EXPLANATORY SLIDES*
+
+---
+
+### Data Visualisation
+
+Remember to always **VISUALIZE the data BEFORE running any stats.** Ordination helps explore patterns in community structure.
+
+---
+
+### Plot an nMDS ordination
+
+Non-metric multidimensional scaling (nMDS) is an ordination method. This is a 2D map of your samples, where:
+
+- Closer points = more similar communities  
+- Distant points = more different communities  
+
+**How well is the multidimensional data represented in two dimensions?**  
+We look at two key diagnostics:  
+
+1. **Stress value** — A low stress value (commonly < 0.2) indicates a better fit  
+2. **Stressplot** — Diagnostic plot showing how well distances are preserved  
+   - Points close to the line = good representation of the true distances  
+
+```{r chunk_NMDS}
+## Perform the NMDS analysis
+tDat1.mds <- metaMDS(Dat1.bc, autotransform = FALSE, trace = FALSE, trymax = 50)
+
+## Print NMDS results including stress value
+print(tDat1.mds)
+
+## Plot the NMDS ordination
+plot(tDat1.mds)
+
+## Add a stressplot to assess ordination quality
+stressplot(tDat1.mds)
+```
+
+---
+
+#### Choosing Distance Measures & NMDS Cautions
+
+**Q: Why do we choose Bray-Curtis or Euclidean for beta diversity analysis?**
+
+- **Bray-Curtis** is preferred for abundance data (like microbial communities):
+  - Accounts for both presence/absence and abundance
+  - Ignores double-zeroes (shared absences), which is common in sparse datasets  
+- **Euclidean distance** measures straight-line distances:
+  - Suitable for continuous, normally distributed data
+  - **NOT recommended** for community composition/count data, as it doesn't handle many zeros well and is sensitive to large values  
+
+In microbial ecology, **Bray-Curtis** is the standard choice for beta diversity with abundance data.
+
+---
+
+**Q: Are there conditions where NMDS is not appropriate?**
+
+- NMDS is flexible (non-parametric) and does **not assume** Euclidean space, making it suitable for ecological data.  
+- But be cautious:
+  - If your distance matrix has many tied ranks or poor structure, NMDS may fail to converge  
+  - If the **stress value is too high** (commonly > 0.2), the 2D map is unreliable  
+- In NMDS:
+  - Axes do **not** explain variance in the traditional sense  
+  - We rely on stress value and stressplot to assess the quality of the ordination  
+
+*SEE SLIDES OR NOTES FOR FURTHER EXAMPLES*
+
+
+#### Let's improve the nMDS plot's aesthetics by adding colours and symbols to make the groupings clearer
+
+```{r chunk_NMDS_add_colours}
+# Plot with dots coloured by contamination level (e.g., High vs Low)
+plot(tDat1.mds$points, col = Fac1$Contamination, pch = 16)
+
+# Add a legend to indicate colours
+legend("topright", legend = c("High", "Low"), pch = 16, col = c("black", "red"))
+```
+
+---
+
+```{r chunk_NMDS_add_symbols}
+# Add both colours for contamination and different symbols for sites
+plot(tDat1.mds, type = "n")  # Empty ordination space
+
+# Points coloured by contamination and shaped by site
+points(tDat1.mds, display = "sites", 
+       pch = c(16, 8, 17, 11, 15, 9, 18, 12)[as.numeric(Fac1$Site)], 
+       col = c("black", "red")[as.numeric(Fac1$Contamination)])
+
+# Legend for sites and contamination levels
+legend("topright", legend = c(levels(Fac1$Site), levels(Fac1$Contamination)), 
+       pch = c(16, 8, 17, 11, 15, 9, 18, 12, 16, 16), 
+       col = c(rep("black", length(levels(Fac1$Site))), "black", "red"), 
+       bty = "n", cex = 1)
+
+# Add stress value to the plot
+legend("bottomright", legend = paste("Stress =", round(tDat1.mds$stress, 2)), bty = "n")
+```
+
+---
+
+```{r chunk_NMDS_add_sample_names}
+# Alternatively, label points by sample name instead of using symbols
+plot(tDat1.mds, type = "n")  # Empty ordination space
+
+# Add sample names, coloured by contamination level
+orditorp(tDat1.mds, display = "sites", cex = 0.6, air = 0.01, 
+         col = c("black", "red")[as.numeric(Fac1$Contamination)])
+
+# Add legend for contamination level
+legend("topright", legend = levels(Fac1$Contamination), 
+       pch = 16, col = c("black", "red"), bty = "n", cex = 1)
+
+# Add stress value to the plot
+legend("bottomright", legend = paste("Stress =", round(tDat1.mds$stress, 2)), bty = "n")
+```
+
+---
+
+### Plot a dendrogram (Cluster diagram)
+
+```{r chunk_cluster_diagram}
+# Hierarchical clustering of the Bray-Curtis distances using average linkage
+Dat1.hclus <- hclust(Dat1.bc, method = "average")
+
+# Plot the resulting dendrogram
+plot(Dat1.hclus, hang = -1, main = "Cluster Diagram (Bray-Curtis)", 
+     xlab = "Samples", ylab = "Dissimilarity")
+```
+
+
+We can see that some samples (ABi5, ABi6, ABi7) are approximately 0.3 dissimilar (or share 0.7 similarity), on average, with the rest of the samples. 
+Or that ABi5 and ABi6 are approximately 0.13 dissimilar (or share 0.87 similarity).
+
+Here's another way to visualise the clusters using rectangles on the dendrogram:
+
+```{r chunk_cluster_diagram_v2}
+cl <- Dat1.hclus
+plot(cl, hang = -1, main = "Cluster Diagram with Cluster Boundaries")
+# Add rectangles to highlight clusters at different dissimilarity levels
+rect.hclust(cl, h = 0.22, border = "grey")
+rect.hclust(cl, h = 0.15, border = "blue")
+```
+
+### Add cluster-enclosing ellipses to the NMDS plot
+
+We can overlay ellipses on the NMDS plot based on the clusters identified from hierarchical clustering.
+
+```{r chunk_NMDS_add_cluster_ellipses}
+# NMDS plot with colours for contamination levels
+plot(tDat1.mds$points, col = Fac1$Contamination, pch = 16)
+legend("topright", legend = c("High", "Low"), pch = 16, col = c("black", "red"))
+
+# Add ellipses around groups identified by hierarchical clustering
+ordiellipse(tDat1.mds, cutree(cl, h = 0.22), kind = "ehull", col = "grey")
+ordiellipse(tDat1.mds, cutree(cl, h = 0.15), kind = "ehull", col = "blue")
+```
+
+Same idea, but using different symbols for the different sites:
+
+```{r chunk_NMDS_add_cluster_ellipses_site_symbols}
+# Empty NMDS plot
+plot(tDat1.mds, type = "n")
+
+# Add points with symbols representing sites and colours representing contamination levels
+points(tDat1.mds, display = "sites",
+       pch = c(16, 8, 17, 11, 15, 9, 18, 12)[as.numeric(Fac1$Site)],
+       col = c("black", "red")[as.numeric(Fac1$Contamination)])
+
+# Add legends for sites and contamination levels
+legend("topright", inset = c(-0.35, 0), xpd = TRUE, horiz = FALSE,
+       legend = c(levels(Fac1$Site), levels(Fac1$Contamination)),
+       pch = c(16, 8, 17, 11, 15, 9, 18, 12, 16, 16),
+       col = c(rep("black", length(levels(Fac1$Site))), "black", "red"),
+       bty = "n", cex = 1)
+
+# Add stress value
+legend("bottomright", legend = paste("Stress =", round(tDat1.mds$stress, 2)), bty = "n")
+
+# Add ellipses based on clusters
+ordiellipse(tDat1.mds, cutree(cl, h = 0.22), kind = "ehull", col = "grey")
+```
+
+There is plenty of material online on how to make NMDS plots. For example: https://jonlefcheck.net/2012/10/24/nmds-tutorial-in-r/
+
+### Plot a PCoA (Principal Coordinates Analysis) for the same dataset
+
+PCoA is another ordination method, often used in exploratory data analysis to visualise patterns of similarity or dissimilarity among samples. 
+Unlike NMDS, PCoA is based on preserving the original distances as faithfully as possible along orthogonal axes.
+
+```{r chunk_PCoA_plot}
+# Calculate Principal Coordinates Analysis (PCoA)
+Dat1.pcoa <- cmdscale(Dat1.bc, eig = TRUE, k = 2)  # k = 2 for 2D plot
+
+# Plot PCoA with colours for contamination level
+plot(Dat1.pcoa$points, col = Fac1$Contamination, pch = 16, 
+     xlab = paste0("PCoA1 (", round(Dat1.pcoa$eig[1] / sum(Dat1.pcoa$eig), 2) * 100, "%)"),
+     ylab = paste0("PCoA2 (", round(Dat1.pcoa$eig[2] / sum(Dat1.pcoa$eig), 2) * 100, "%)"),
+     main = "PCoA Plot (Bray-Curtis)")
+
+# Add legend for contamination level
+legend("topright", legend = c("High", "Low"), pch = 16, col = c("black", "red"))
+```
+
+### Add symbols to the PCoA
+```{r chunk_PCoA_plot_symbols}
+# Expand right margin before plotting
+par(mar = c(5, 4, 4, 8))  
+
+# Calculate Principal Coordinates Analysis (PCoA)
+Dat1.pcoa <- cmdscale(Dat1.bc, eig = TRUE, k = 2)  # k = 2 for 2D plot
+
+# Empty plot space
+plot(Dat1.pcoa$points, type = "n",
+     xlab = paste0("PCoA1 (", round(Dat1.pcoa$eig[1] / sum(Dat1.pcoa$eig), 2) * 100, "%)"),
+     ylab = paste0("PCoA2 (", round(Dat1.pcoa$eig[2] / sum(Dat1.pcoa$eig), 2) * 100, "%)"),
+     main = "PCoA Plot (Bray-Curtis) with Symbols for Sites")
+
+# Points shaped by site and coloured by contamination
+points(Dat1.pcoa$points,
+       pch = c(16, 8, 17, 11, 15, 9, 18, 12)[as.numeric(Fac1$Site)],
+       col = c("black", "red")[as.numeric(Fac1$Contamination)])
+
+# Legend for site symbols and contamination colours
+usr <- par("usr")
+legend(usr[2] + 0.02, usr[4], xpd = TRUE,
+       legend = c(levels(Fac1$Site), levels(Fac1$Contamination)),
+       pch = c(16, 8, 17, 11, 15, 9, 18, 12, 16, 16),
+       col = c(rep("black", length(levels(Fac1$Site))), "black", "red"),
+       bty = "n", cex = 1)
+
+```
+
+### Plot NMDS and PCoA side by side for comparison
+```{r chunk_NMDS_PCoA_side_by_side, fig.width=12, fig.height=6}
+par(mfrow = c(1, 2))
+
+# NMDS plot with flipped x-axis
+par(mar = c(5, 4, 4, 8))  # expand right margin
+plot(-scores(tDat1.mds, display = "sites")[,1], 
+      scores(tDat1.mds, display = "sites")[,2], type = "n",
+     xlab = "NMDS1 (flipped)",
+     ylab = "NMDS2",
+     xaxt = "n", yaxt = "n",
+     main = "NMDS with Symbols for Sites (x-axis flipped)")
+points(-scores(tDat1.mds, display = "sites")[,1],
+        scores(tDat1.mds, display = "sites")[,2],
+       pch = c(16, 8, 17, 11, 15, 9, 18, 12)[as.numeric(Fac1$Site)],
+       col = c("black", "red")[as.numeric(Fac1$Contamination)])
+usr <- par("usr")
+legend(usr[2] + 0.02, usr[4], xpd = TRUE,
+       legend = c(levels(Fac1$Site), levels(Fac1$Contamination)),
+       pch = c(16, 8, 17, 11, 15, 9, 18, 12, 16, 16),
+       col = c(rep("black", length(levels(Fac1$Site))), "black", "red"),
+       bty = "n", cex = 1)
+legend("bottomleft", legend = paste("Stress =", round(tDat1.mds$stress, 2)), bty = "n")
+
+# PCoA plot
+par(mar = c(5, 4, 4, 8))  # expand right margin
+plot(Dat1.pcoa$points, type = "n",
+     xlab = paste0("PCoA1 (", round(Dat1.pcoa$eig[1] / sum(Dat1.pcoa$eig), 2) * 100, "%)"),
+     ylab = paste0("PCoA2 (", round(Dat1.pcoa$eig[2] / sum(Dat1.pcoa$eig), 2) * 100, "%)"),
+     main = "PCoA with Symbols for Sites")
+points(Dat1.pcoa$points,
+       pch = c(16, 8, 17, 11, 15, 9, 18, 12)[as.numeric(Fac1$Site)],
+       col = c("black", "red")[as.numeric(Fac1$Contamination)])
+usr <- par("usr")
+legend(usr[2] + 0.02, usr[4], xpd = TRUE,
+       legend = c(levels(Fac1$Site), levels(Fac1$Contamination)),
+       pch = c(16, 8, 17, 11, 15, 9, 18, 12, 16, 16),
+       col = c(rep("black", length(levels(Fac1$Site))), "black", "red"),
+       bty = "n", cex = 1)
+```
+
+---
+
+### Notes on Differences Between PCoA and NMDS
+
+- **PCoA** (Principal Coordinates Analysis) is a metric, linear ordination method:
+  - It attempts to preserve original distances (such as Bray-Curtis) as much as possible in a reduced number of axes.
+  - Axes are orthogonal and ordered by decreasing importance (first axis explains the most variation).
+  - The proportion of variance explained by each axis is meaningful and can be interpreted (e.g., Axis 1 explains X% of the variation).
+  - The **sum of R² of all axes never exceeds 1**, because R² represents the proportion of variation explained.
+  
+- **NMDS** is a non-metric, rank-based ordination method:
+  - It represents the ranks of pairwise distances rather than preserving absolute distances.
+  - Axes do not have inherent meaning or order; interpretation focuses on the **stress value**.
+  - The lower the stress value, the better the 2D ordination represents the multidimensional distance structure.
+  - Axes cannot be interpreted in terms of explained variance like in PCoA.
+  - NMDS is more robust to outliers and avoids artefacts like the **horseshoe effect**, which can occur with PCoA if community differences between samples are very large.
+
+---
+
+### Why not PCA?
+
+- **PCA** (Principal Components Analysis) is a linear ordination method that assumes **Euclidean distances** between samples:
+  - It is not recommended for community composition data like microbial datasets, which are typically high-dimensional, sparse, and non-linear.
+  - Using PCA on Bray-Curtis or ecological distance matrices is incorrect and may lead to misleading results.
+  - PCA should not be used for microbial datasets with non-Euclidean distances, as it violates core assumptions of the method.
+
+*SEE EXPLANATORY SLIDES*
+
+
+### HYPOTHESIS TESTING: Are the differences between groups statistically significant?
+
+#### Statistical analysis - PERMANOVA (see papers by M.J. Anderson)
+
+We use PERMANOVA (Permutational Multivariate Analysis of Variance) to test whether community composition differs between groups, in this case based on **Contamination**, while accounting for **Site nested within Contamination**.
+
+```{r chunk_PERMANOVA_nested}
+# Run PERMANOVA with nested structure (Site nested within Contamination)
+adonis2(Dat1.bc ~ Contamination / Site, data = Fac1)
+```
+
+**Explanation of the code:**
+
+- The **'/'** indicates that **Site** is nested within **Contamination**, meaning Sites are grouped within each contamination level, not crossed.
+- PERMANOVA partitions the variance in community dissimilarity (Bray-Curtis) among these factors.
+- Permutations are conducted appropriately given the nested structure.
+- For recent R versions, see <https://search.r-project.org/CRAN/refmans/vegan/html/adonis.html> for updated permutation strategies.
+
+**Interpretation of the output:**
+
+- **Contamination**: Tests for differences in community composition between contamination levels, accounting for Sites within those levels. A significant p-value here indicates a true effect of Contamination.
+- **Contamination:Site**: This term represents the variability among Sites within each Contamination level. It is not an interaction term but reflects natural variation at the Site level.
+- **Residual**: Remaining unexplained variation.
+
+In this example, both **Contamination** and **Site nested within Contamination** are statistically significant (**p = 0.001**), suggesting strong evidence for differences in community composition both across Contamination levels and among Sites.
+
+*SEE EXPLANATORY SLIDES*
+
+---
+
+#### TESTS FOR MULTIVARIATE DISPERSION (PERMDISP)
+
+Visual inspection of the nMDS plot suggested that bacterial communities at **high contamination** sites may exhibit greater dispersion (i.e., more variability) than those at **low contamination** sites.
+
+We test this formally using PERMDISP, which assesses differences in multivariate dispersion (similar to Levene's test for homogeneity of variance). It is good practice to run PERMDISP alongside PERMANOVA to distinguish whether group differences are due to location (centroid differences) or dispersion.
+
+```{r chunk_PERMDISP_test}
+# Calculate distances to group centroids (multivariate spread)
+Dat1.disp = betadisper(Dat1.bc, Fac1$Contamination, type = "centroid")
+
+# Visualise with a boxplot
+par(pty = 's')
+boxplot(Dat1.disp, main = "Distance to Centroid by Contamination")
+
+# Statistical test for differences in dispersion
+permutest(Dat1.disp)
+```
+
+**Interpretation of the output:**
+
+- The boxplot shows the distance of each sample to its group centroid (mean position) for each contamination level.
+- The PERMDISP test p-value is **0.083**, which is **not statistically significant**, suggesting that the groups do not differ significantly in their dispersion.
+- This supports the interpretation that the significant differences detected by PERMANOVA reflect genuine shifts in community composition (location effects), rather than differences in variability (dispersion) among groups.
+
+**Conclusion:**
+
+- There are significant differences in community composition between contamination levels, even after accounting for Site-level variation (nested design).
+- There is no evidence that differences in group dispersion drive these results, strengthening confidence that the PERMANOVA results reflect true ecological differences.
+
+
+
+## Which taxa are contributing most to the differences between groups? / Which taxa differ significantly between groups?
+
+*SEE EXPLANATORY SLIDES*
+
+Here, we will use the raw data (not dissimilarities) and run univariate
+tests for each variable using the 'mvabund' package.
+
+This is a way better approach as to using something like 'SIMPER'
+('similarity percentages', Clarke 1993, Australian Journal of Ecology),
+which is not a statistical test.
+
+mvabund runs Generalised Linear Models to each response variable and you
+can specify an appropriate distribution that, for instance, accounts for
+mean-variance relationships appropriately. It also provides a
+multivariate test statistic that accounts for correlations among
+variables (so in essence is an alternative statistical multivariate
+approach to distance-based analyses such as PERMANOVA; see Wang et al.
+2012, Methods in Ecol. & Evol.)
+
+install.packages('mvabund') \# Run once only to download to the computer
+library('mvabund') \# Load the package
+
+```{r chunk_65aa47}
+dat.mv = mvabund(tDat) # makes an mvabund object with the bacterial data (the transposed matrix of RAW COUNTS)
+```
+
+We will use RAW COUNTS (hence 'tDat'), but we still need to account for
+differences in sequencing depth. We will follow the approach proposed by
+McMurdie & Holmes 2014 (PLOS Comput. Biol.), which is to include the
+total number of counts per sample explicitly in the model.
+
+```{r chunk_f4550f}
+# Lets add a column to Fac1 (the spreadsheet with covariates) of sums of counts per sample 
+Fac1$Counts = rowSums(tDat)
+head(Fac1)
+
+range(Fac1$Counts) #range of count values
+```
+
+We can have a quick look at the spread of our data using the boxplot
+function
+
+```{r chunk_283a70}
+# Set margins for the plot (bottom, left, top, right)
+par(mar = c(4, 20, 2, 2))
+
+# Adjust text size for axis labels
+par(cex.axis = 0.4)  # Adjust the value as needed (e.g., 0.8 for 80% of default size)
+
+# Create a horizontal boxplot of tDat
+boxplot(tDat, horizontal = TRUE, las = 2, main = "Abundance")
+
+```
+
+It looks like some taxa (e.g. Bacteria Gammaproteobacteria) are much
+more abundant and variable than others (e.g. Cymadusa munnu). It's
+probably a good idea to check our mean-variance relationship then!
+
+We can do this using the meanvar.plot function:
+
+```{r chunk_meanvar.plot}
+# Set the plot window size before calling meanvar.plot()
+dev.new(width = 8, height = 8)  # Adjust width and height as needed
+
+# Run meanvar.plot and modify axis labels after
+meanvar.plot(dat.mv)
+title(xlab = "Taxa mean", ylab = "Taxa variance")
+
+```
+
+You can clearly see that the species with high means (on the x axis)
+also have high variances (y axis).
+
+Now let's get back to our research questions. - Which taxa are
+contributing most to the differences between groups? - Which taxa differ
+significantly between groups?
+
+Let's start by eyeballing the data:
+
+We will use ggplot2 to contrast abundances against 'Contamination':
+
+```{r chunk_abundance_boxplot_by_contamination, fig.height=12, fig.width=8}
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+# Reshape your data
+dat_long <- dat.mv %>%
+  as.data.frame() %>%
+  mutate(Contamination = Fac1$Contamination) %>%
+  pivot_longer(cols = -Contamination, names_to = "Taxon", values_to = "Abundance")
+
+# Log-transform abundance, adding a small constant to avoid log(0)
+dat_long <- dat_long %>%
+  mutate(Abundance_log = log(Abundance + 1))
+
+# Create the plot
+ggplot(dat_long, aes(x = Abundance_log, y = Taxon, color = Contamination)) +
+  geom_boxplot(outlier.size = 1) +
+  theme_linedraw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.y = element_text(size = 8)) +
+  labs(title = "Abundances by Taxon and Contamination",
+       x = expression(paste("Abundances [log(", y, " + 1) scale]")),
+       y = "") +
+  scale_color_manual(values = c("Low" = "black", "High" = "red"))
+```
+
+### Fit the model using a poisson distribution
+Lets fit the model using a poisson distribution - fits count data (e.g. number
+of sequences)
+
+```{r chunk_poisson_dist}
+dat.nb = manyglm(dat.mv ~ Counts + Contamination, family="poisson", data=Fac1)
+
+```
+
+Before we examine the output, we need to check our model assumptions. We
+can use the plot function to generate a plot of residuals.
+
+#### Check the model fitting by plotting the Residuals:
+
+```{r chunk_res_vs_fitted}
+plot(dat.nb,n.vars=15) # involves some randomization, repeat it a couple of times
+```
+
+Fan pattern among multiple plots - bad model fit. This could mean that
+one of our assumptions was wrong: either our mean-variance relationship
+was wrongly specified, or our assumed relationship between our response
+and predictors was incorrect. Or, we could have missed a key explaining
+variable in our model which leaves a lot of unexplained variance.
+
+### Fit the model using a negative binomial distribution:
+Lets now fit the model using a negative binomial dist. - fits count data
+(e.g. number of sequences):
+
+```{r chunk_manyglm}
+dat.nb = manyglm(dat.mv ~ Counts + Contamination, family="negative.binomial", data=Fac1)
+
+```
+
+We can deal with variance by choosing a family of GLMs with an
+appropriate mean-variance assumption.
+
+The default family used by mvabund when fitting multivariate GLMs is
+negative binomial which assumes a quadratic mean-variance relationship
+and a log-linear relationship between the response variables and any
+continuous variables.
+
+#### Check the model fitting plotting the residuals:
+
+```{r chunk_res_vs_fit_modelfit}
+plot(dat.nb,n.vars=15) # involves some randomisation, repeat it a couple of times
+# No obvious pattern among multiple plots - a good model fit.
+```
+
+### Run a statistical test on the Model:
+
+```{r chunk_model_test}
+dat.aov = anova(dat.nb, nBoot=999, p.uni="adjusted") # used nBoot = 100 for trial, 999 for publication
+```
+
+#### Get the output of the test:
+
+```{r chunk_model_test_output}
+dat.aov$uni.p # univariate adjusted p values, note we are interested in row 2
+# the output is wordy
+```
+
+### Show only those OTUs that are significantly different
+
+```{r chunk_model_test_sig_diff}
+diffs=which(dat.aov$uni.p[3,]<0.05) # you could also ask for < 0.1 so we catch the group slightly above 0.05
+diffs
+```
+
+#### Plot the abundances of only these significanly different groups:
+
+```{r chunk_abundances_ggplot}
+# Subset dat.mv to only the taxa/groups in 'diffs'
+dat_sub <- dat.mv[, diffs]
+
+# Reshape to long format
+dat_long <- dat_sub %>%
+  as.data.frame() %>%
+  mutate(Contamination = Fac1$Contamination) %>%
+  pivot_longer(cols = -Contamination, names_to = "Taxon", values_to = "Abundance")
+
+# Create boxplot with taxa on y-axis
+ggplot(dat_long, aes(x = Abundance, y = Taxon, color = Contamination)) +
+  geom_boxplot(outlier.size = 1) +
+  theme_linedraw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.y = element_text(size = 10)) +
+  labs(title = "Abundances of Selected Groups by Contamination",
+       x = "Count Abundance", y = "") +
+  scale_color_manual(values = c("Low" = "black", "High" = "red"))
+```
+
+
+### Example Heatmap of Abundance Data by Contamination
+
+Heatmaps are a useful visualisation to show patterns of abundance across samples or groups. Below, we generate a heatmap based on the same abundance data used in the boxplots, summarised by **Contamination** and **Taxon**.
+
+```{r chunk_abundance_heatmap, fig.height=8, fig.width=6}
+# Reshape and summarise the data
+dat_heat <- dat.mv %>%
+  as.data.frame() %>%
+  mutate(Contamination = Fac1$Contamination) %>%
+  pivot_longer(cols = -Contamination, names_to = "Taxon", values_to = "Abundance") %>%
+  mutate(Contamination = factor(Contamination, levels = c("Low", "High"))) %>%
+  group_by(Contamination, Taxon) %>%
+  summarise(Mean_Abundance = mean(Abundance), .groups = "drop")
+
+# Create the heatmap
+ggplot(dat_heat, aes(x = Contamination, y = Taxon, fill = Mean_Abundance)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "white", high = "red") +
+  theme_linedraw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.y = element_text(size = 8),
+        axis.text.x = element_text(size = 10, angle = 0, hjust = 0.5)) +
+  labs(title = "Mean Abundances by Taxon and Contamination",
+       x = "Contamination",
+       y = "Taxon",
+       fill = "Mean Abundance")
+```
+
+**Notes:**
+
+- The heatmap displays the average abundance of each taxon for each Contamination level.
+- Lighter colours indicate lower abundance, while darker colours (red) indicate higher abundance.
+- You can modify the colour scale (e.g., using `scale_fill_viridis_c()` from the **viridis** package) for alternative colour schemes.
+- This heatmap summarises patterns in abundance across groups and complements the boxplots showing individual data points.
+
+
+#### Include Site information in the Heatmap of Abundance Data by Contamination
+
+```{r chunk_abundance_heatmap_by_site, fig.height=8, fig.width=8}
+# Reshape and summarise the data by Site and Contamination
+dat_heat <- dat.mv %>%
+  as.data.frame() %>%
+  mutate(Contamination = Fac1$Contamination,
+         Site = Fac1$Site) %>%
+  pivot_longer(cols = -c(Contamination, Site), names_to = "Taxon", values_to = "Abundance") %>%
+  group_by(Contamination, Site, Taxon) %>%
+  summarise(Mean_Abundance = mean(Abundance), .groups = "drop") %>%
+  mutate(Contamination = factor(Contamination, levels = c("Low", "High")),
+         Site = as.factor(Site),
+         Contam_Site = interaction(Contamination, Site, sep = "_"))
+
+# Create the heatmap with one column per Site within each Contamination group
+ggplot(dat_heat, aes(x = Contam_Site, y = Taxon, fill = Mean_Abundance)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "white", high = "red") +
+  theme_linedraw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.text.x = element_text(size = 8, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 8)) +
+  labs(title = "Mean Abundances by Taxon and Site within Contamination",
+       x = "Site (grouped by Contamination)",
+       y = "Taxon",
+       fill = "Mean Abundance")
+```
+
+*SEE EXPLANATORY SLIDES*
+
+## Which environmental variables relate to the bacterial multivariate structure?
+
+A tool we will use for this is called distance-based Redundancy Analysis
+(dbRDA) - McArdle & Anderson (Ecology 82, 290-297; 2001). This is a type
+of constrained ordination.
+
+We need to import the chemistry data, which is a subset of gas
+chromatography/mass spectrometry data of chemical extracts from the
+surface of the coralline algae samples, with the relative abundance of
+these biomarkers given (i.e. chemical composition of the seaweed hosts).
+
+Note that "X" has no meaning in the variable names of this example (just
+some environmental data).
+
+We want to test for relationships between these data and the bacterial
+community structure
+
+### Load the environmental data
+
+```{r chunk_e0fa08}
+# Import environmental variables directly from the public course repository
+Env1 <- read.delim(
+  "https://raw.githubusercontent.com/ezesanti/SCELSE-summer-course-experimental-design-data-analysis/main/data/Environmental_data.txt",
+  row.names = 1
+)
+```
+
+### Data Pre-processing
+
+Before we proceed with the analysis, we need to: A) Check for strong
+correlations between covariates - if so, remove some from that set B)
+Check for even spread - if not, transform those variables that are
+skewed C) Normalise to bring the to the same scale
+
+install.packages('car') library(car)
+
+Create a data visualization function:
+
+```{r chunk_aa4935}
+
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
+{
+  usr <- par("usr"); on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  r <- abs(cor(x, y))
+  txt <- format(c(r, 0.123456789), digits = digits)[1]
+  txt <- paste0(prefix, txt)
+  if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+  text(0.5, 0.5, txt, cex = cex.cor * r+0.75)
+}
+```
+
+#### Visualize the data:
+
+```{r scatterplot_env1}
+scatterplotMatrix(Env1,
+                  diagonal = "histogram",
+                  upper.panel = panel.cor)  # Correlation in upper panel
+```
+
+Note that the X380 is showing some uneven distribution and is highly
+bunched on the left (green histogram). To spread this data out, a
+transformation is required. We can log transform this variable.
+
+#### Are there any others that need transformation?
+
+```{r chunk_003e7c}
+Env2 = Env1
+Env2$X380 = log(Env2$X380) # log transform x380
+```
+
+Log transform on X380 doesn't really remove the skewedness of the data
+to make it normally distributed. Yet, its better than before. This is
+real data, so good to point out that sometimes that's all you can do and
+thus need to be careful with conclusions.
+
+#### Are there any correlated variables? Maybe 441.9 and 479 are.
+
+```{r chunk_6bc5ef}
+Rm1 = which(colnames(Env2)%in%c("X441.9")) # column number of X441.9
+Env2 = Env2[,-Rm1] # remove X441.9
+```
+
+#### Let's visualize again, after the pre-processing we just did:
+
+```{r scatterplot_env2}
+scatterplotMatrix(Env2,
+                 diagonal ="histogram",
+                 upper.panel = panel.cor)
+                  
+```
+
+#### Standardize the environmental variables. 
+Standardization centers data around the mean and scales to a standard deviation of 1
+
+Equation: (x – mean)/standard deviation
+
+```{r chunk_cd48d6}
+Env2.norm = scale(Env2)
+Env2.norm = data.frame(Env2.norm)
+
+Env2.norm[1:10,1:5] # See the first 10 rows and first 5 columns
+```
+
+#### Visualize again, after standardization:
+
+```{r scatterplot_env2norm}
+
+scatterplotMatrix(Env2.norm,
+                 diagonal ="histogram",
+                  upper.panel = panel.cor # Correlation in upper panel
+                  )
+
+```
+
+Now we are ready for the analysis.
+
+For that we need our square-root transformed (transposed, standardized) OTU
+table: Dat1.sqrt
+
+### Distance-based redundancy analysis (dbRDA)
+
+We will first define mod0, an object that stores the result of a dbRDA
+where Dat1.sqrt is the response data, Env2.norm is the environmental
+data, and the distance method used is "bray" (Bray-Curtis distance).
+
+The formula Dat1.sqrt \~ 1 means that no environmental variables are
+used in the model (a model with only the intercept), similar to
+Non-metric Multidimensional Scaling (NMDS). This means that mod0 is
+unconstrained. We will use this later in model selection.
+
+```{r chunk_d09774}
+mod0 = dbrda(Dat1.sqrt ~ 1, Env2.norm, distance = "bray") # the 1 means to no variables. Same as our NMDS above
+
+```
+
+Now we will constrain our dbRDA. Here mod1 is an object that stores the
+result of a dbRDA where Dat1.sqrt is constrained by all the variables in
+Env2.norm.
+
+The formula Dat1.sqrt \~ . indicates that all variables in Env2.norm are
+used to constrain the ordination.
+
+```{r chunk_4033b6}
+mod1 = dbrda(Dat1.sqrt ~ ., Env2.norm, distance = "bray") # the . means all variables in Env constrained by model fitted
+```
+
+#### Marginal tests (i.e. each covariate on its own, independently of others)
+
+The line below performs an Analysis of Variance (ANOVA) on mod1 to test
+the significance of each variable independently (marginal tests).
+
+The by="mar" argument specifies that the test should be done marginally
+(i.e., for each covariate on its own).
+
+The permu=999 argument specifies that 999 permutations should be used to
+assess significance.
+
+```{r chunk_efd748}
+anova(mod1, by="mar", permu=999)
+```
+
+#### Overall Structure of the Output
+
+1)  Header Information: Permutation test for dbrda under reduced model:
+    Indicates that the test is based on the dbRDA model. Marginal
+    effects of terms: Shows that the effects of each term (environmental
+    variable) are tested independently. Permutation: free: Indicates
+    that the permutations were conducted freely, without constraints.
+    Number of permutations: 999: Specifies that 999 permutations were
+    used to assess significance.
+
+2)  Model Information: Model: dbrda(formula = Dat1.sqrt \~ X380 + X389 +
+    X401 + X405.2 + X420 + X479 + X499 + X537.9 + X571.9, data =
+    Env2.norm, distance = "bray"): The model formula used in the dbRDA,
+    where Dat1.sqrt is the response variable and the terms on the
+    right-hand side are the environmental variables included in the
+    model. The Bray-Curtis distance is used.
+
+3)  Interpretation of the Results Table: The table provides the
+    following columns for each environmental variable: Df: Degrees of
+    freedom for each variable. SumOfSqs: Sum of squares, representing
+    the amount of variation explained by the variable. F: F-statistic
+    for the variable, indicating the ratio of the explained variance to
+    the unexplained variance. Pr(\>F): P-value for the F-statistic,
+    showing the significance of the variable.
+
+Significant Variables: Only X380 is significant at the 0.05 level,
+indicating it has a significant effect on the community composition.
+
+Non-significant Variables: All other variables (X389, X401, X405.2,
+X420, X479, X499, X537.9, and X571.9) do not show significant effects.
+
+#### Plot the dbRDA
+
+Calculate percentage variance explained by each axis:
+```{r chunk_49283b}
+summary_mod1 <- summary(mod1)
+percent_variance1 <- summary_mod1$cont$importance[2,] * 100
+```
+
+Plot the dbRDA constrained ordination results stored in mod1, with percentage variance on axes:
+
+```{r chunk_70e054}
+plot(mod1, main = "dbRDA - mod1", xlab = paste0("dbRDA1 (", round(percent_variance1[1], 2), "%)"), ylab = paste0("dbRDA2 (", round(percent_variance1[2], 2), "%)"))
+orditorp(mod1, display = "sites", cex = 0.55, air = 0.01, col = c("black", "red")[as.numeric(Fac1$Contamination)])
+legend("topright", legend = c("High", "Low"), pch = 16, col = c("black", "red"))
+```
+
+### Perform stepwise selection based on p-values
+
+We can do model selection - "best" model considering all covariates and their combinations. Based on p-values, step wise selection.
+
+```{r chunk_89ff97}
+pval = ordistep(mod0, scope = formula(mod1), direction="both")
+pval$anova
+```
+
+#### 'Best' Model Interpretation:
+
+-   ordistep Function: The ordistep function is used to perform stepwise
+    selection to determine the "best" dbRDA model by iteratively adding
+    and/or removing environmental variables based on their p-values. It
+    starts with the intercept-only model (mod0) and explores models up
+    to the full model (mod1).
+-   Stepwise Selection: The process considers both forward and backward
+    directions, meaning it can add variables that improve the model and
+    remove variables that do not significantly contribute to the model.
+-   ANOVA Table: The output pval\$anova will show the results of the
+    stepwise selection process, including the sequence of adding or
+    removing variables, their corresponding F-values, and p-values. This
+    table helps identify which variables were included in the final
+    "best" model and their significance levels.
+
+
+#### Plot the dbRDA with the 'Best' model
+
+Calculate percentage variance explained by each axis for pval:
+```{r chunk_2a2557}
+summary_pval <- summary(pval)
+percent_variance_pval <- summary_pval$cont$importance[2,] * 100
+```
+
+Plot the dBRDA:
+```{r chunk_a7e724}
+plot(pval, main = "dbRDA - pval", xlab = paste0("dbRDA1 (", round(percent_variance_pval[1], 2), "%)"), ylab = paste0("dbRDA2 (", round(percent_variance_pval[2], 2), "%)"))
+orditorp(pval, display = "sites", cex = 0.55, air = 0.01, col = c("black", "red")[as.numeric(Fac1$Contamination)])
+legend("topright", legend = c("High", "Low"), pch = 16, col = c("black", "red"))
+```
+
+#### Now try another model, based on Akaike's Information Criteria (AIC) for selection:
+
+```{r chunk_2537fa}
+AICselec = step(mod0, scope = formula(mod1), direction="both")
+AICselec$anova
+```
+
+#### Plot the dbRDA for the AIC model:
+
+Calculate percentage variance explained by each axis for AICselec:
+```{r chunk_3f7a26}
+summary_AICselec <- summary(AICselec)
+percent_variance_AICselec <- summary_AICselec$cont$importance[2,] * 100
+```
+
+Plot AICselec with percentage variance on axes:
+```{r chunk_213c16}
+plot(AICselec, main = "dbRDA - AICselec", xlab = paste0("dbRDA1 (", round(percent_variance_AICselec[1], 2), "%)"), ylab = paste0("dbRDA2 (", round(percent_variance_AICselec[2], 2), "%)"))
+orditorp(AICselec, display = "sites", cex = 0.55, air = 0.01, col = c("black", "red")[as.numeric(Fac1$Contamination)])
+legend("topright", legend = c("High", "Low"), pch = 16, col = c("black", "red"))
+```
+
+Comparing our selection criteria: the "best" model above and the
+Akaike's Information Criteria (AIC), penalty for additional parameters
+is less using the AIC. Thus, when AIC will present the danger that it
+would outfit, while the other will present the danger that it would
+underfit.
