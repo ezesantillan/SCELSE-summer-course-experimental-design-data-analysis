@@ -589,12 +589,12 @@ The datasets used in this practical are hosted in the public course GitHub repos
 ## Import the data matrix and the factors data directly from the course GitHub repository
 
 Dat <- read.delim(
-  "https://raw.githubusercontent.com/ezesanti/SCELSE-summer-course-experimental-design-data-analysis/main/data/OTU.txt",
+  "https://raw.githubusercontent.com/ezesantillan/SCELSE-summer-course-experimental-design-data-analysis/main/data/OTU.txt",
   row.names = 1
 )        # OTU data
 
 Fac1 <- read.delim(
-  "https://raw.githubusercontent.com/ezesanti/SCELSE-summer-course-experimental-design-data-analysis/main/data/Factors.txt",
+  "https://raw.githubusercontent.com/ezesantillan/SCELSE-summer-course-experimental-design-data-analysis/main/data/Factors.txt",
   row.names = 1
 )        # Factor metadata
 
@@ -1963,7 +1963,7 @@ community structure
 ```{r chunk_e0fa08}
 # Import environmental variables directly from the public course repository
 Env1 <- read.delim(
-  "https://raw.githubusercontent.com/ezesanti/SCELSE-summer-course-experimental-design-data-analysis/main/data/Environmental_data.txt",
+  "https://raw.githubusercontent.com/ezesantillan/SCELSE-summer-course-experimental-design-data-analysis/main/data/Environmental_data.txt",
   row.names = 1
 )
 ```
