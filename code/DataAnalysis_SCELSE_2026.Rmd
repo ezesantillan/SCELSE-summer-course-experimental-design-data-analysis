@@ -27,7 +27,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-[Script tested in R-version 4.4.1 // 2026-June-24]
+[Script tested in R-version 4.4.1 // 2026-June-26]
 
 **R Markdown**
 
@@ -54,14 +54,18 @@ rm(list=ls())
 
 ```
 
-**Set Working directory** Set the Working directory where you have saved
-the data files. You can do this by going to the tab 'Session' -\> 'set
-working directory' -\> 'choose directory'
+**Working directory**
 
-You can also do this by using code, e.g.: In my computer, it would be:
+No working directory setup is required for this practical, as all datasets are loaded directly from the public course GitHub repository.
 
-```{r chunk_set_directory}
-setwd("/Users/esantillan/OneDrive - Nanyang Technological University/SCELSE/Summer Course/2026/Data Analysis")
+For users wishing to work with local copies of the data, the working directory can be set manually through:
+
+`Session` → `Set Working Directory` → `Choose Directory`
+
+or:
+
+```{r chunk_set_directory, eval=FALSE}
+setwd("path/to/your/course/folder")
 ```
 
 **Install and Load Packages** The traditional ways to install and load a
