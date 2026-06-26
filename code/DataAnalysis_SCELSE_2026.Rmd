@@ -2222,3 +2222,39 @@ Akaike's Information Criteria (AIC), penalty for additional parameters
 is less using the AIC. Thus, when AIC will present the danger that it
 would outfit, while the other will present the danger that it would
 underfit.
+
+
+# About the instructor
+
+**Dr. Ezequiel Santillan**
+Senior Research Fellow
+Singapore Centre for Environmental Life Sciences Engineering (SCELSE)
+Nanyang Technological University (NTU), Singapore
+
+Research interests include microbial ecology, environmental biotechnology, resource recovery, and circular bioeconomy systems.
+
+For questions, feedback, or suggestions regarding these course materials, please contact:
+
+**Ezequiel Santillan**
+Email: [esantillan@ntu.edu.sg](mailto:esantillan@ntu.edu.sg)
+LinkedIn: https://www.linkedin.com/in/ezequielsantillan/
+
+---
+
+# Citation and reuse
+
+These materials were originally developed for the **SCELSE Summer Course 2026: Experimental Design and Data Analysis**.
+
+If you use or adapt these materials for teaching, workshops, or training purposes, please cite the repository or acknowledge the original source.
+
+Suggested citation:
+
+Santillan E. (2026). *SCELSE Summer Course 2026: Experimental Design and Data Analysis* [Course materials]. GitHub. Available at:
+
+Repository: https://github.com/ezesantillan/SCELSE-summer-course-experimental-design-data-analysis
+
+Course website: https://ezesantillan.github.io/SCELSE-summer-course-experimental-design-data-analysis/
+
+A DOI-linked archival version will be added after the first GitHub release is archived through Zenodo.
+
+© 2026 Ezequiel Santillan. Materials may be reused and adapted for non-commercial educational purposes with attribution.
